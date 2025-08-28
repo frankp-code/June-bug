@@ -87,14 +87,27 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // Your actual Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCcjbaaVUTX5Ib-sEotEaCFFEtpFEDyO0g",
+            authDomain: "juniesjournalapp.firebaseapp.com",
+            projectId: "juniesjournalapp",
+            storageBucket: "juniesjournalapp.firebasestorage.app",
+            messagingSenderId: "17313748223",
+            appId: "1:17313748223:web:12f543c01c6d0f062e28ca"
+        };
+        
+        // When running on GitHub Pages, we don't have __app_id from the Canvas.
+        // We can derive it from the projectId or use a static one.
+        const appId = firebaseConfig.projectId || 'junies-journal-github'; // Using project ID or a custom ID
+        
+        // On GitHub Pages, there is no __initial_auth_token.
+        // We will rely on signInAnonymously in initFirebase().
+        const initialAuthToken = null; // No initial token from Canvas
 
-        // Global variables provided by the canvas environment
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         let db, auth, userId;
         let isAuthReady = false; // Flag to check if Firebase is ready
