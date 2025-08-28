@@ -20,15 +20,22 @@
         .table-container {
             min-width: 640px;
         }
+        /* New tab button styles for consistency with save/load buttons */
         .tab-button {
-            @apply px-4 py-2 text-sm font-medium rounded-t-lg focus:outline-none transition-colors duration-200;
+            @apply bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors duration-200;
+            margin-right: 0.5rem; /* Space between buttons */
+            margin-bottom: 0.5rem; /* For wrapping on small screens */
+            flex-grow: 1; /* Allow buttons to grow */
+            text-align: center;
         }
         .tab-button.active {
-            @apply bg-white text-blue-600 border-b-2 border-blue-600;
+            @apply bg-blue-600 hover:bg-blue-700;
         }
-        .tab-button.inactive {
-            @apply bg-gray-100 text-gray-600 hover:bg-gray-200;
+        /* Flex container for tabs to allow wrapping */
+        .tab-buttons-container {
+            @apply flex flex-wrap justify-center sm:justify-start gap-2 mb-4;
         }
+
         .graph-container {
             background-color: #ffffff;
             border-radius: 0.75rem; /* rounded-lg */
@@ -62,6 +69,66 @@
             stroke: #ffffff; /* white */
             stroke-width: 1.5px;
         }
+
+        /* Styles for star rating */
+        .star-rating {
+            display: inline-block;
+            direction: rtl; /* For right-to-left star selection */
+        }
+        .star-rating input[type="radio"] {
+            display: none;
+        }
+        .star-rating label {
+            font-size: 1.5rem; /* Large stars */
+            color: #d1d5db; /* Gray stars by default */
+            cursor: pointer;
+            padding: 0 0.1rem;
+            transition: color 0.2s;
+        }
+        .star-rating input[type="radio"]:checked ~ label,
+        .star-rating label:hover,
+        .star-rating label:hover ~ label {
+            color: #fcd34d; /* Yellow for selected/hovered stars */
+        }
+        .star-rating.read-only label {
+            cursor: default;
+        }
+        .star-rating.read-only input[type="radio"]:checked ~ label {
+             color: #fcd34d;
+        }
+        /* Hide content by default, display flex for collapsed content within table row */
+        .collapsible-content-wrapper {
+            display: contents; /* Allows children to behave as if they are direct children of the tr */
+        }
+        .collapsible-content {
+            display: none;
+        }
+        .collapsible-content.expanded {
+            display: table-cell; /* or block, or flex depending on the children */
+        }
+        /* Style for the time cell to indicate it's clickable */
+        .collapsible-toggle-cell {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+        }
+        .collapsible-toggle-cell::after {
+            content: '▼'; /* Down arrow */
+            position: absolute;
+            right: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            transition: transform 0.2s;
+        }
+        .collapsible-toggle-cell.expanded::after {
+            content: '▲'; /* Up arrow */
+        }
+
+        /* Ensure dropdowns fit well */
+        select[data-input-type="dropdown"] {
+            padding-right: 0.5rem; /* Adjust padding for arrow */
+        }
+
     </style>
 </head>
 <body class="p-4 sm:p-8">
@@ -92,9 +159,10 @@
         </div>
 
         <!-- Tabs -->
-        <div class="flex border-b border-gray-200 mb-4">
+        <div class="tab-buttons-container">
             <button id="dailyLogTabBtn" class="tab-button active">Daily Log</button>
             <button id="summaryTabBtn" class="tab-button inactive">Summary</button>
+            <button id="trainingTabBtn" class="tab-button inactive">Training</button>
         </div>
 
         <!-- Tab Content: Daily Log -->
@@ -107,7 +175,7 @@
                             <th scope="col" class="py-3 px-2 sm:px-4 text-center">Nap</th>
                             <th scope="col" class="py-3 px-2 sm:px-4 text-center">Wake Up</th>
                             <th scope="col" class="py-3 px-2 sm:px-4 text-center">Food</th>
-                            <th scope="col" class="py-3 px-2 sm:px-4 text-center">Hand Feeding</th> <!-- New Column -->
+                            <th scope="col" class="py-3 px-2 sm:px-4 text-center">Hand Feeding</th>
                             <th scope="col" class="py-3 px-2 sm:px-4 text-center">Walk</th>
                             <th scope="col" class="py-3 px-2 sm:px-4 text-center">Wee</th>
                             <th scope="col" class="py-3 px-2 sm:px-4 text-center">Poo</th>
@@ -139,6 +207,17 @@
             <h2 class="text-2xl font-semibold text-gray-800 mb-4">Weekly Activity Trends</h2>
             <div id="weeklyGraphsContainer" class="space-y-8">
                 <!-- Graphs will be rendered here by D3.js -->
+            </div>
+        </div>
+
+        <!-- Tab Content: Training -->
+        <div id="trainingTabContent" class="tab-content hidden p-4">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Daily Training Log</h2>
+            <button id="addTrainingEntryBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors duration-200 mb-4 opacity-50 cursor-not-allowed" disabled>
+                Add Training Entry
+            </button>
+            <div id="trainingEntriesContainer" class="space-y-4">
+                <!-- Training entries will be added here -->
             </div>
         </div>
 
@@ -190,7 +269,8 @@
         const activities = ['Nap', 'Wake Up', 'Food', 'Hand Feeding', 'Walk', 'Wee', 'Poo', 'Sick'];
         // Activities for which dropdowns are used
         const dropdownActivities = ['Food', 'Hand Feeding'];
-        let currentDayData = []; // Store the currently loaded daily log data
+        let currentDayData = []; // Store the currently loaded daily log data for activity tab
+        let currentTrainingData = []; // Store the currently loaded daily log data for training tab
 
         // UI elements
         const saveBtn = document.getElementById('saveBtn');
@@ -207,15 +287,21 @@
         // Tab elements
         const dailyLogTabBtn = document.getElementById('dailyLogTabBtn');
         const summaryTabBtn = document.getElementById('summaryTabBtn');
+        const trainingTabBtn = document.getElementById('trainingTabBtn'); // New tab button
         const dailyLogTabContent = document.getElementById('dailyLogTabContent');
         const summaryTabContent = document.getElementById('summaryTabContent');
+        const trainingTabContent = document.getElementById('trainingTabContent'); // New tab content
         const totalSleepDurationSpan = document.getElementById('totalSleepDuration');
         const sleepPeriodsList = document.getElementById('sleepPeriodsList');
-        const totalFoodCombinedSpan = document.getElementById('totalFoodCombined'); // New summary element
-        const weeCountSummarySpan = document.getElementById('weeCountSummary');     // New summary element
-        const pooCountSummarySpan = document.getElementById('pooCountSummary');     // New summary element
-        const sickCountSummarySpan = document.getElementById('sickCountSummary');   // New summary element
+        const totalFoodCombinedSpan = document.getElementById('totalFoodCombined');
+        const weeCountSummarySpan = document.getElementById('weeCountSummary');
+        const pooCountSummarySpan = document.getElementById('pooCountSummary');
+        const sickCountSummarySpan = document.getElementById('sickCountSummary');
         const weeklyGraphsContainer = document.getElementById('weeklyGraphsContainer');
+
+        // Training tab elements
+        const addTrainingEntryBtn = document.getElementById('addTrainingEntryBtn'); // New button
+        const trainingEntriesContainer = document.getElementById('trainingEntriesContainer'); // New container
 
 
         // --- Utility Functions ---
@@ -249,29 +335,29 @@
         function formatDuration(totalMinutes) {
             if (totalMinutes < 0) return "0 hours 0 minutes";
             const hours = Math.floor(totalMinutes / 60);
-            const minutes = Math.round(totalMinutes % 60); // Round minutes for better display
+            const minutes = Math.round(totalMinutes % 60);
             return `${hours} hours ${minutes} minutes`;
         }
 
         /**
-         * Helper function to fetch log data for a specific date.
+         * Helper function to fetch log data for a specific date from a given collection.
          * @param {string} dateString - The date in YYYY-MM-DD format.
+         * @param {string} collectionName - The name of the Firestore collection (e.g., 'puppyLogs', 'trainingLogs').
          * @returns {Promise<Array|null>} - A promise that resolves to the log data or null if not found/error.
          */
-        async function getLogForDate(dateString) {
-            if (!db || !userId || !dateString) {
+        async function getLogForDate(dateString, collectionName) {
+            if (!db || !userId || !dateString || !collectionName) {
                 return null;
             }
             try {
-                const docRef = doc(db, 'artifacts', appId, 'users', userId, 'puppyLogs', dateString);
+                const docRef = doc(db, 'artifacts', appId, 'users', userId, collectionName, dateString);
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
                     return docSnap.data().log;
                 }
                 return null;
             } catch (e) {
-                console.error(`Error fetching log for date ${dateString}: `, e);
-                // No modal here, as this is a background fetch for calculation
+                console.error(`Error fetching log for date ${dateString} from ${collectionName}: `, e);
                 return null;
             }
         }
@@ -293,10 +379,13 @@
                         // Enable buttons and remove opacity
                         saveBtn.disabled = false;
                         loadBtn.disabled = false;
+                        addTrainingEntryBtn.disabled = false; // Enable add training button
                         saveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
                         loadBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                        addTrainingEntryBtn.classList.remove('opacity-50', 'cursor-not-allowed'); // Remove opacity from add training button
+
                         // Load data for today after auth is ready
-                        await loadData(); // Automatically load today's log
+                        await loadAllDataForDate(logDateInput.value); // Load both activity and training logs
                     } else {
                         // Sign in anonymously if not authenticated
                         await signInAnonymously(auth);
@@ -309,93 +398,154 @@
             }
         }
 
-        // --- Table Generation and Data Handling ---
+        // --- Table Generation and Data Handling for Daily Log Tab ---
 
-        // Function to create a new table row for a given time
-        function createTableRow(timeString) {
+        /**
+         * Creates a new table row for a given time, with collapsible content.
+         * @param {string} timeString - The time for the row (e.g., "12:00 AM").
+         * @param {boolean} isExpandedInitially - Whether the row's content should be expanded on creation.
+         */
+        function createTableRow(timeString, isExpandedInitially) {
             const row = document.createElement('tr');
             row.className = 'bg-white border-b hover:bg-gray-50';
-            
-            // Time cell
+            row.dataset.time = timeString; // Store time for identification
+
+            // Time cell (collapsible toggle)
             const timeCell = document.createElement('td');
-            timeCell.className = 'py-2 px-2 sm:px-4 font-medium text-gray-900 whitespace-nowrap';
+            timeCell.className = `py-2 px-2 sm:px-4 font-medium text-gray-900 whitespace-nowrap collapsible-toggle-cell ${isExpandedInitially ? 'expanded' : ''}`;
             timeCell.textContent = timeString;
+            timeCell.addEventListener('click', () => toggleRowContent(row));
             row.appendChild(timeCell);
 
+            // Create a wrapper for the collapsible content cells
+            const contentCellsWrapper = document.createElement('td');
+            contentCellsWrapper.colSpan = activities.length + 1; // Spans across all activity and notes columns
+            contentCellsWrapper.className = `collapsible-content-wrapper p-0`; // p-0 to avoid extra padding
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = `flex flex-wrap items-center -mx-2 ${isExpandedInitially ? 'expanded' : 'hidden'}`; // Use flex for contained inputs
+            contentDiv.style.minWidth = `calc(640px - ${margin.left + margin.right}px - 6rem)`; // Ensure inputs don't wrap too aggressively
+
             // Activity cells with checkboxes or dropdowns
-            activities.forEach(activity => {
-                const cell = document.createElement('td');
-                cell.className = 'py-2 px-2 sm:px-4 text-center';
+            activities.slice(1).forEach(activity => { // Start from 'Nap' (index 1), as 'Time' is separate
+                const cellWrapper = document.createElement('div');
+                cellWrapper.className = 'w-1/5 sm:w-auto p-2 text-center flex-shrink-0'; // Adjust width as needed for responsiveness
+
+                const label = document.createElement('label');
+                label.className = 'block text-xs font-semibold text-gray-700 mb-1';
+                label.textContent = activity; // Label above input
 
                 if (dropdownActivities.includes(activity)) {
                     const select = document.createElement('select');
-                    select.className = 'block w-full text-sm rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 max-w-[5rem] mx-auto';
+                    select.className = 'block w-full text-sm rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500';
                     select.dataset.activity = activity;
                     select.dataset.inputType = 'dropdown'; // Custom data attribute for type
                     
-                    // Add 0g option
                     let option = document.createElement('option');
-                    option.value = '0g';
+                    option.value = '0'; // Store numeric value
                     option.textContent = '0g';
                     select.appendChild(option);
 
-                    // Add options from 5g to 80g in 5g increments
                     for (let i = 5; i <= 80; i += 5) {
                         option = document.createElement('option');
-                        option.value = `${i}g`;
+                        option.value = `${i}`; // Store numeric value
                         option.textContent = `${i}g`;
                         select.appendChild(option);
                     }
-                    cell.appendChild(select);
+                    cellWrapper.appendChild(label);
+                    cellWrapper.appendChild(select);
                 } else {
                     const checkbox = document.createElement('input');
                     checkbox.type = 'checkbox';
                     checkbox.className = 'w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2';
                     checkbox.dataset.activity = activity;
-                    cell.appendChild(checkbox);
+                    
+                    const inputWrapper = document.createElement('div');
+                    inputWrapper.className = 'flex items-center justify-center h-full';
+                    inputWrapper.appendChild(checkbox);
+
+                    cellWrapper.appendChild(label);
+                    cellWrapper.appendChild(inputWrapper);
                 }
-                row.appendChild(cell);
+                contentDiv.appendChild(cellWrapper);
             });
 
             // Notes cell
-            const notesCell = document.createElement('td');
-            notesCell.className = 'py-2 px-2 sm:px-4';
+            const notesCellWrapper = document.createElement('div');
+            notesCellWrapper.className = 'w-full p-2'; // Full width for notes
+            const notesLabel = document.createElement('label');
+            notesLabel.className = 'block text-xs font-semibold text-gray-700 mb-1';
+            notesLabel.textContent = 'Notes';
+            notesCellWrapper.appendChild(notesLabel);
+
             const notesInput = document.createElement('input');
             notesInput.type = 'text';
             notesInput.placeholder = 'Add a note...';
             notesInput.className = 'block w-full text-sm rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500';
-            notesInput.style.maxWidth = '10rem'; // Constrain width for a better layout
-            notesCell.appendChild(notesInput);
-            row.appendChild(notesCell);
+            notesCellWrapper.appendChild(notesInput);
+            contentDiv.appendChild(notesCellWrapper);
+
+            contentCellsWrapper.appendChild(contentDiv);
+            row.appendChild(contentCellsWrapper);
+
 
             return row;
         }
 
+        // Toggle visibility of a row's content
+        function toggleRowContent(rowElement) {
+            const timeCell = rowElement.querySelector('.collapsible-toggle-cell');
+            const contentDiv = rowElement.querySelector('.collapsible-content'); // Target the direct content div
+            if (timeCell && contentDiv) {
+                if (contentDiv.classList.contains('expanded')) {
+                    contentDiv.classList.remove('expanded');
+                    contentDiv.classList.add('hidden');
+                    timeCell.classList.remove('expanded');
+                } else {
+                    contentDiv.classList.remove('hidden');
+                    contentDiv.classList.add('expanded');
+                    timeCell.classList.add('expanded');
+                }
+            }
+        }
+        
         // Generate the 24-hour table with 15-minute intervals
         function generateEmptyTable() {
             activityTableBody.innerHTML = '';
             const now = new Date();
-            now.setHours(0, 0, 0, 0); // Start at midnight
+            const currentHour = now.getHours();
+            const currentMinute = now.getMinutes();
+            let currentFifteenMinSlotIndex = -1;
+
+            const tableStartDate = new Date();
+            tableStartDate.setHours(0, 0, 0, 0); // Start at midnight
             
             // Loop for 24 hours (24 * 4 = 96 intervals)
             for (let i = 0; i < 24 * 4; i++) {
-                const hour = now.getHours();
-                const minute = now.getMinutes();
+                const hour = tableStartDate.getHours();
+                const minute = tableStartDate.getMinutes();
                 const ampm = hour >= 12 ? 'PM' : 'AM';
                 const displayHour = (hour % 12) === 0 ? 12 : hour % 12;
                 const timeString = `${displayHour}:${minute.toString().padStart(2, '0')} ${ampm}`;
-                
-                const newRow = createTableRow(timeString);
+
+                // Determine if this is the current 15-min slot
+                const isCurrentSlot = (
+                    hour === currentHour &&
+                    minute <= currentMinute &&
+                    currentMinute < (minute + 15)
+                );
+
+                const newRow = createTableRow(timeString, isCurrentSlot);
                 activityTableBody.appendChild(newRow);
                 
                 // Add 15 minutes to the time
-                now.setMinutes(now.getMinutes() + 15);
+                tableStartDate.setMinutes(tableStartDate.getMinutes() + 15);
             }
             currentDayData = []; // Clear current data when generating empty table
             calculateAndDisplaySummary(); // Recalculate summary for empty data
         }
         
-        // Save data to Firestore
+        // Save data to Firestore (Activity Log)
         async function saveData() {
             if (!isAuthReady) {
                 showMessage('Error', 'App is not ready. Please wait a moment.');
@@ -444,10 +594,9 @@
             }
         }
 
-        // Load data from Firestore
+        // Load data from Firestore (Activity Log)
         async function loadData() {
             if (!isAuthReady) {
-                // If auth is not ready, we wait for onAuthStateChanged to call loadData
                 return;
             }
 
@@ -458,7 +607,10 @@
             }
 
             try {
-                const savedData = await getLogForDate(selectedDate); // Use helper function
+                const savedData = await getLogForDate(selectedDate, 'puppyLogs'); // Use helper function
+
+                // Re-generate empty table first to ensure correct structure for mapping data
+                generateEmptyTable(); 
 
                 if (savedData) {
                     if (savedData.length === activityTableBody.children.length) {
@@ -470,7 +622,7 @@
                                 const inputElement = row.querySelector(`[data-activity="${activity}"]`);
                                 if (inputElement) {
                                     if (inputElement.dataset.inputType === 'dropdown') {
-                                        inputElement.value = (rowData.activities[activity] || 0) + 'g'; // Set value (e.g., "5g")
+                                        inputElement.value = (rowData.activities[activity] || 0); // Set numeric value
                                     } else {
                                         inputElement.checked = rowData.activities[activity] || false; // Set checked status
                                     }
@@ -480,19 +632,18 @@
                             notesInput.value = rowData.notes || '';
                         });
                         currentDayData = savedData; // Update local cache
-                        showMessage('Success', 'Log loaded successfully!');
+                        showMessage('Success', 'Activity log loaded successfully!');
                     } else {
-                        // Data format mismatch: potentially different number of rows
-                        showMessage('Error', 'Data format mismatch. Generating empty log.');
-                        generateEmptyTable();
+                        showMessage('Error', 'Activity data format mismatch. Generating empty log.');
+                        currentDayData = []; // Reset current day data
                     }
                 } else {
-                    showMessage('Info', 'No log found for this date. Starting a new, blank log.');
-                    generateEmptyTable();
+                    showMessage('Info', 'No activity log found for this date. Starting a new, blank log.');
+                    currentDayData = []; // Reset current day data
                 }
             } catch (e) {
-                console.error("Error loading document: ", e);
-                showMessage('Error', 'Failed to load log. Please check your network connection.');
+                console.error("Error loading activity document: ", e);
+                showMessage('Error', 'Failed to load activity log. Please check your network connection.');
             } finally {
                 // Always recalculate summary after attempting to load data
                 await calculateAndDisplaySummary(); // Await summary calculation
@@ -504,16 +655,14 @@
         async function calculateAndDisplaySummary() {
             let totalSleepMinutes = 0;
             let sleepPeriods = [];
-            let potentialSleepStartEntry = null; // Store the full entry object for start time
+            let potentialSleepStartEntry = null;
             const selectedDateString = logDateInput.value;
 
-            // Daily Activity Counts
             let totalDailyFoodGrams = 0;
             let dailyWeeCount = 0;
             let dailyPooCount = 0;
             let dailySickCount = 0;
 
-            // If no data or no selected date, reset summary
             if (!currentDayData || currentDayData.length === 0 || !selectedDateString) {
                 totalSleepDurationSpan.textContent = "0 hours 0 minutes";
                 sleepPeriodsList.innerHTML = "<p class='text-gray-500'>No sleep data available for this day.</p>";
@@ -522,28 +671,20 @@
                 pooCountSummarySpan.textContent = "0";
                 sickCountSummarySpan.textContent = "0";
             } else {
-            
-                // Create a Date object for the beginning of the selected day to construct full timestamps
                 const currentDayDate = new Date(selectedDateString);
-                currentDayDate.setHours(0, 0, 0, 0); // Normalize to start of day
+                currentDayDate.setHours(0, 0, 0, 0);
 
                 for (let i = 0; i < currentDayData.length; i++) {
                     const entry = currentDayData[i];
                     const entryMinutes = timeToMinutes(entry.time);
-                    
-                    // Construct full Date object for the entry time
                     const entryDateTime = new Date(currentDayDate);
                     entryDateTime.setHours(Math.floor(entryMinutes / 60), entryMinutes % 60, 0, 0);
 
                     const isNap = entry.activities.Nap;
                     const isWakeUp = entry.activities['Wake Up'];
 
-                    // Sleep calculation logic
                     if (isNap && potentialSleepStartEntry === null) {
-                        potentialSleepStartEntry = {
-                            time: entry.time,
-                            dateTime: entryDateTime
-                        };
+                        potentialSleepStartEntry = { time: entry.time, dateTime: entryDateTime };
                     } else if (isWakeUp && potentialSleepStartEntry !== null) {
                         const sleepEndDateTime = entryDateTime;
                         const durationMs = sleepEndDateTime.getTime() - potentialSleepStartEntry.dateTime.getTime();
@@ -551,16 +692,11 @@
 
                         if (durationMinutes > 0) {
                             totalSleepMinutes += durationMinutes;
-                            sleepPeriods.push({
-                                start: potentialSleepStartEntry.time,
-                                end: entry.time,
-                                duration: durationMinutes
-                            });
+                            sleepPeriods.push({ start: potentialSleepStartEntry.time, end: entry.time, duration: durationMinutes });
                         }
-                        potentialSleepStartEntry = null; // Reset for the next sleep period
+                        potentialSleepStartEntry = null;
                     }
 
-                    // Daily Food and Activity Counts
                     if (entry.activities.Food !== undefined) {
                         totalDailyFoodGrams += (typeof entry.activities.Food === 'number' ? entry.activities.Food : 0);
                     }
@@ -572,9 +708,7 @@
                     if (entry.activities.Sick) dailySickCount++;
                 }
 
-                // Handle a sleep period that extends until the next day
                 if (potentialSleepStartEntry !== null) {
-                    // Calculate the next day's date
                     const nextDay = new Date(currentDayDate);
                     nextDay.setDate(currentDayDate.getDate() + 1);
                     const nextDayDateString = nextDay.toISOString().split('T')[0];
@@ -583,15 +717,13 @@
                     let sleepEndTimeString = null;
                     let foundWakeUpNextDay = false;
 
-                    // Try to load the next day's data
-                    const nextDayLog = await getLogForDate(nextDayDateString);
+                    const nextDayLog = await getLogForDate(nextDayDateString, 'puppyLogs');
 
                     if (nextDayLog && nextDayLog.length > 0) {
-                        // Find the first "Wake Up" on the next day
                         for (const nextDayEntry of nextDayLog) {
                             if (nextDayEntry.activities['Wake Up']) {
                                 const nextDayEntryMinutes = timeToMinutes(nextDayEntry.time);
-                                sleepEndDateTime = new Date(nextDay); // Start of next day
+                                sleepEndDateTime = new Date(nextDay);
                                 sleepEndDateTime.setHours(Math.floor(nextDayEntryMinutes / 60), nextDayEntryMinutes % 60, 0, 0);
                                 sleepEndTimeString = nextDayEntry.time + " (next day)";
                                 foundWakeUpNextDay = true;
@@ -601,20 +733,14 @@
                     }
 
                     if (foundWakeUpNextDay && sleepEndDateTime !== null) {
-                        // Calculate total duration from potentialSleepStartEntry to sleepEndDateTime (next day)
                         const durationMs = sleepEndDateTime.getTime() - potentialSleepStartEntry.dateTime.getTime();
                         const durationMinutes = durationMs / (1000 * 60);
 
                         if (durationMinutes > 0) {
                             totalSleepMinutes += durationMinutes;
-                            sleepPeriods.push({
-                                start: potentialSleepStartEntry.time,
-                                end: sleepEndTimeString,
-                                duration: durationMinutes
-                            });
+                            sleepPeriods.push({ start: potentialSleepStartEntry.time, end: sleepEndTimeString, duration: durationMinutes });
                         }
                     } else {
-                        // Fallback: If no Wake Up found next day, assume sleep until end of current day (23:59)
                         const endOfDayDateTime = new Date(currentDayDate);
                         endOfDayDateTime.setHours(23, 59, 0, 0);
                         
@@ -623,11 +749,7 @@
 
                         if (durationMinutes > 0) {
                             totalSleepMinutes += durationMinutes;
-                            sleepPeriods.push({
-                                start: potentialSleepStartEntry.time,
-                                end: "End of Day",
-                                duration: durationMinutes
-                            });
+                            sleepPeriods.push({ start: potentialSleepStartEntry.time, end: "End of Day", duration: durationMinutes });
                         }
                     }
                 }
@@ -638,7 +760,6 @@
                 pooCountSummarySpan.textContent = dailyPooCount.toString();
                 sickCountSummarySpan.textContent = dailySickCount.toString();
 
-                // Display individual sleep periods
                 if (sleepPeriods.length > 0) {
                     sleepPeriodsList.innerHTML = `<h3 class="font-medium text-gray-700 mb-2">Individual Sleep Periods:</h3>`;
                     const ul = document.createElement('ul');
@@ -652,34 +773,31 @@
                 } else {
                     sleepPeriodsList.innerHTML = "<p class='text-gray-500'>No explicit Nap/Wake Up cycles recorded for sleep.</p>";
                 }
-            } // End of if (!currentDayData || ...)
-
+            }
 
             // --- Weekly Activity Data Processing ---
             const weeklyData = [];
-            const activitiesForGraphs = ['Nap', 'Food', 'Hand Feeding', 'Walk', 'Wee', 'Poo', 'Sick']; // Define activities to graph
-            const currentDate = new Date(selectedDateString); // Use selected date for the week
+            const activitiesForGraphs = ['Nap', 'Food', 'Hand Feeding', 'Walk', 'Wee', 'Poo', 'Sick'];
+            const currentDate = new Date(selectedDateString);
             currentDate.setHours(0, 0, 0, 0);
 
-            for (let i = 6; i >= 0; i--) { // Loop for 7 days (current day + past 6 days)
+            for (let i = 6; i >= 0; i--) {
                 const loopDate = new Date(currentDate);
                 loopDate.setDate(currentDate.getDate() - i);
                 const loopDateString = loopDate.toISOString().split('T')[0];
                 const dayName = loopDate.toLocaleDateString('en-US', { weekday: 'short' });
 
                 const dailyCounts = { date: dayName, fullDate: loopDateString };
-                activitiesForGraphs.forEach(activity => dailyCounts[activity] = 0); // Initialize counts/grams for graphs
+                activitiesForGraphs.forEach(activity => dailyCounts[activity] = 0);
 
-                const logForLoopDate = await getLogForDate(loopDateString);
+                const logForLoopDate = await getLogForDate(loopDateString, 'puppyLogs');
 
                 if (logForLoopDate) {
                     logForLoopDate.forEach(entry => {
                         activitiesForGraphs.forEach(activity => {
                             if (dropdownActivities.includes(activity)) {
-                                // Sum grams for dropdowns
                                 dailyCounts[activity] += (typeof entry.activities[activity] === 'number' ? entry.activities[activity] : 0);
-                            } else if (activity !== 'Wake Up') { // Don't graph 'Wake Up' directly
-                                // Count occurrences for checkboxes
+                            } else if (activity !== 'Wake Up') {
                                 if (entry.activities[activity]) {
                                     dailyCounts[activity]++;
                                 }
@@ -702,8 +820,6 @@
             const height = 200 - margin.top - margin.bottom;
 
             activitiesToGraph.forEach(activity => {
-                // Skip 'Wake Up' as it's part of sleep calculation, not a standalone count for the graph
-                // It's already filtered out in weeklyData processing, but good to double check.
                 if (activity === 'Wake Up') return;
 
                 const graphDiv = document.createElement('div');
@@ -725,20 +841,17 @@
 
                 const yScale = d3.scaleLinear()
                     .range([height, 0])
-                    .domain([0, d3.max(data, d => d[activity]) + 1]); // +1 to ensure padding at top
+                    .domain([0, d3.max(data, d => d[activity]) + 1]);
 
-                // Add X axis
                 svg.append('g')
                     .attr('class', 'x axis')
                     .attr('transform', `translate(0,${height})`)
                     .call(d3.axisBottom(xScale));
 
-                // Add Y axis
                 svg.append('g')
                     .attr('class', 'y axis')
-                    .call(d3.axisLeft(yScale).ticks(yScale.domain()[1] > 0 ? yScale.domain()[1] : 1).tickFormat(d3.format("d"))); // Integer ticks
+                    .call(d3.axisLeft(yScale).ticks(yScale.domain()[1] > 0 ? yScale.domain()[1] : 1).tickFormat(d3.format("d")));
 
-                // Add Y-axis grid lines
                 svg.append("g")
                     .attr("class", "grid")
                     .call(d3.axisLeft(yScale)
@@ -747,7 +860,6 @@
                         .tickFormat("")
                     );
 
-                // Add the line
                 svg.append('path')
                     .datum(data)
                     .attr('class', 'line')
@@ -756,7 +868,6 @@
                         .y(d => yScale(d[activity]))
                     );
 
-                // Add the circles for points
                 svg.selectAll('.dot')
                     .data(data)
                     .enter().append('circle')
@@ -767,10 +878,157 @@
             });
         }
 
+        // --- Training Tab Functions ---
+
+        /**
+         * Renders training entries in the training tab.
+         * @param {Array<Object>} trainingData - Array of training entry objects {type: string, rating: number}.
+         */
+        function renderTrainingEntries(trainingData) {
+            trainingEntriesContainer.innerHTML = ''; // Clear existing entries
+
+            if (!trainingData || trainingData.length === 0) {
+                trainingEntriesContainer.innerHTML = "<p class='text-gray-500'>No training entries for this day.</p>";
+                return;
+            }
+
+            trainingData.forEach((entry, index) => {
+                const entryDiv = document.createElement('div');
+                entryDiv.className = 'flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 p-4 bg-gray-50 rounded-lg shadow-sm';
+                entryDiv.dataset.entryIndex = index; // Used for updating/deleting
+
+                // Training Type Input
+                const typeInput = document.createElement('input');
+                typeInput.type = 'text';
+                typeInput.placeholder = 'Training Type';
+                typeInput.value = entry.type || '';
+                typeInput.className = 'flex-grow block w-full sm:w-auto text-sm rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500';
+                typeInput.addEventListener('change', (e) => {
+                    currentTrainingData[index].type = e.target.value;
+                });
+                entryDiv.appendChild(typeInput);
+
+                // Star Rating
+                const starRatingDiv = document.createElement('div');
+                starRatingDiv.className = 'star-rating flex-shrink-0';
+                starRatingDiv.dataset.entryIndex = index;
+
+                for (let i = 5; i >= 1; i--) {
+                    const radio = document.createElement('input');
+                    radio.type = 'radio';
+                    radio.id = `star-${index}-${i}`;
+                    radio.name = `rating-${index}`;
+                    radio.value = i;
+                    radio.checked = (entry.rating === i);
+                    radio.addEventListener('change', (e) => {
+                        currentTrainingData[index].rating = parseInt(e.target.value);
+                    });
+                    starRatingDiv.appendChild(radio);
+
+                    const label = document.createElement('label');
+                    label.htmlFor = `star-${index}-${i}`;
+                    label.textContent = '⭐'; // Star character
+                    starRatingDiv.appendChild(label);
+                }
+                entryDiv.appendChild(starRatingDiv);
+
+                // Delete Button
+                const deleteButton = document.createElement('button');
+                deleteButton.className = 'bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded-lg text-sm shadow-sm transition-colors duration-200 flex-shrink-0';
+                deleteButton.textContent = 'Delete';
+                deleteButton.addEventListener('click', () => deleteTrainingEntry(index));
+                entryDiv.appendChild(deleteButton);
+
+                trainingEntriesContainer.appendChild(entryDiv);
+            });
+        }
+
+        // Add a new blank training entry
+        function addTrainingEntry() {
+            currentTrainingData.push({ type: '', rating: 0 });
+            renderTrainingEntries(currentTrainingData);
+        }
+
+        // Delete a training entry by index
+        function deleteTrainingEntry(index) {
+            currentTrainingData.splice(index, 1);
+            renderTrainingEntries(currentTrainingData); // Re-render to update indices and display
+        }
+
+        // Save training data to Firestore
+        async function saveTrainingData() {
+            if (!isAuthReady) {
+                showMessage('Error', 'App is not ready. Please wait a moment.');
+                return;
+            }
+
+            const selectedDate = logDateInput.value;
+            if (!selectedDate) {
+                showMessage('Error', 'Please select a date before saving.');
+                return;
+            }
+
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'users', userId, 'trainingLogs', selectedDate);
+                await setDoc(docRef, { log: currentTrainingData });
+                showMessage('Success', 'Training log saved successfully!');
+            } catch (e) {
+                console.error("Error saving training document: ", e);
+                showMessage('Error', 'Failed to save training log. Please try again.');
+            }
+        }
+
+        // Load training data from Firestore
+        async function loadTrainingData() {
+            if (!isAuthReady) {
+                return;
+            }
+
+            const selectedDate = logDateInput.value;
+            if (!selectedDate) {
+                showMessage('Error', 'Please select a date before loading.');
+                return;
+            }
+
+            try {
+                const savedData = await getLogForDate(selectedDate, 'trainingLogs');
+                if (savedData) {
+                    currentTrainingData = savedData;
+                    showMessage('Success', 'Training log loaded successfully!');
+                } else {
+                    currentTrainingData = [];
+                    showMessage('Info', 'No training log found for this date. Starting a new, blank log.');
+                }
+            } catch (e) {
+                console.error("Error loading training document: ", e);
+                showMessage('Error', 'Failed to load training log. Please check your network connection.');
+            } finally {
+                renderTrainingEntries(currentTrainingData);
+            }
+        }
+
+        // --- Combined Data Loading ---
+        async function loadAllDataForDate(dateString) {
+            await loadData(); // Load activity log
+            await loadTrainingData(); // Load training log
+            // If the current tab is summary or training, update its content
+            if (dailyLogTabContent.classList.contains('hidden') && summaryTabContent.classList.contains('hidden')) {
+                showTab('trainingTab'); // If training tab was active, re-render
+            } else if (dailyLogTabContent.classList.contains('hidden')) {
+                 showTab('summaryTab'); // If summary tab was active, re-render
+            } else {
+                 showTab('dailyLogTab'); // Re-render daily log if active
+            }
+        }
+
 
         // --- Tab Switching Logic ---
 
+        let activeTabId = 'dailyLogTab'; // Track the currently active tab
+
         function showTab(tabId) {
+            activeTabId = tabId; // Update active tab tracker
+
             // Hide all tab content
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.add('hidden');
@@ -787,26 +1045,46 @@
             document.getElementById(tabId + 'Btn').classList.remove('inactive');
             document.getElementById(tabId + 'Btn').classList.add('active');
 
-            // If switching to summary tab, ensure summary is calculated
+            // Logic to update content based on active tab
             if (tabId === 'summaryTab') {
-                calculateAndDisplaySummary(); 
+                calculateAndDisplaySummary();
+            } else if (tabId === 'trainingTab') {
+                renderTrainingEntries(currentTrainingData); // Re-render current training data
+            } else if (tabId === 'dailyLogTab') {
+                // No specific action needed, table is already generated/loaded
             }
         }
 
         // --- Event Listeners and Initial Setup ---
         
         // Event listeners for save/load buttons and date changes
-        saveBtn.addEventListener('click', saveData);
-        loadBtn.addEventListener('click', loadData);
+        saveBtn.addEventListener('click', async () => {
+            // Save data for currently active tab
+            if (activeTabId === 'dailyLogTab') {
+                await saveData();
+            } else if (activeTabId === 'trainingTab') {
+                await saveTrainingData();
+            } else { // If on summary tab, save both if data was modified implicitly
+                await saveData();
+                await saveTrainingData();
+            }
+        });
+
+        loadBtn.addEventListener('click', async () => {
+            await loadAllDataForDate(logDateInput.value);
+        });
+
         logDateInput.addEventListener('change', async () => {
             if (isAuthReady) {
-                await loadData(); // Reload data when date changes
+                await loadAllDataForDate(logDateInput.value); // Load both logs when date changes
             }
         });
 
         // Tab button event listeners
         dailyLogTabBtn.addEventListener('click', () => showTab('dailyLogTab'));
         summaryTabBtn.addEventListener('click', () => showTab('summaryTab'));
+        trainingTabBtn.addEventListener('click', () => showTab('trainingTab')); // New tab listener
+        addTrainingEntryBtn.addEventListener('click', addTrainingEntry); // New training button listener
         
         // Set today's date as default
         function setDefaultDate() {
@@ -820,8 +1098,8 @@
         // Initial setup on window load
         window.onload = async function() {
             setDefaultDate();
-            generateEmptyTable(); // Generate the table structure first
-            await initFirebase(); // initFirebase calls loadData() after auth
+            generateEmptyTable(); // Generate the activity table structure first
+            await initFirebase(); // initFirebase calls loadAllDataForDate() after auth
             showTab('dailyLogTab'); // Show the daily log tab by default
         };
     </script>
