@@ -97,15 +97,23 @@
              color: #fcd34d;
         }
         /* Hide content by default, display flex for collapsed content within table row */
-        .collapsible-content-wrapper {
-            display: contents; /* Allows children to behave as if they are direct children of the tr */
-        }
+        /*
+           Old:
+           .collapsible-content-wrapper { display: contents; }
+           .collapsible-content { display: none; }
+           .collapsible-content.expanded { display: table-cell; }
+        */
+        /* New simplified approach for collapsible content */
         .collapsible-content {
-            display: none;
+            display: none; /* Hidden by default */
+            flex-wrap: wrap; /* Content inside should flex */
+            align-items: center;
+            /* margin: -0.5rem; */ /* Removed margin, will handle padding directly on cells */
         }
         .collapsible-content.expanded {
-            display: table-cell; /* or block, or flex depending on the children */
+            display: flex; /* Shown as flex when expanded */
         }
+
         /* Style for the time cell to indicate it's clickable */
         .collapsible-toggle-cell {
             cursor: pointer;
@@ -372,23 +380,29 @@
                 db = getFirestore(app);
 
                 onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        userIdDisplay.textContent = userId;
-                        isAuthReady = true;
-                        // Enable buttons and remove opacity
-                        saveBtn.disabled = false;
-                        loadBtn.disabled = false;
-                        addTrainingEntryBtn.disabled = false; // Enable add training button
-                        saveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                        loadBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                        addTrainingEntryBtn.classList.remove('opacity-50', 'cursor-not-allowed'); // Remove opacity from add training button
+                    try { // Added try-catch block here
+                        if (user) {
+                            userId = user.uid;
+                            userIdDisplay.textContent = userId;
+                            isAuthReady = true;
+                            // Enable buttons and remove opacity
+                            saveBtn.disabled = false;
+                            loadBtn.disabled = false;
+                            addTrainingEntryBtn.disabled = false; // Enable add training button
+                            saveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                            loadBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                            addTrainingEntryBtn.classList.remove('opacity-50', 'cursor-not-allowed'); // Remove opacity from add training button
 
-                        // Load data for today after auth is ready
-                        await loadAllDataForDate(logDateInput.value); // Load both activity and training logs
-                    } else {
-                        // Sign in anonymously if not authenticated
-                        await signInAnonymously(auth);
+                            // Load data for today after auth is ready
+                            await loadAllDataForDate(logDateInput.value); // Load both activity and training logs
+                        } else {
+                            // Sign in anonymously if not authenticated
+                            await signInAnonymously(auth);
+                        }
+                    } catch (errorInAuthCallback) {
+                        console.error("Error inside onAuthStateChanged callback:", errorInAuthCallback);
+                        userIdDisplay.textContent = 'Error (callback)';
+                        showMessage('Error', 'An error occurred during authentication callback. Check console.');
                     }
                 });
             } catch (error) {
@@ -417,17 +431,20 @@
             timeCell.addEventListener('click', () => toggleRowContent(row));
             row.appendChild(timeCell);
 
-            // Create a wrapper for the collapsible content cells
-            const contentCellsWrapper = document.createElement('td');
-            contentCellsWrapper.colSpan = activities.length + 1; // Spans across all activity and notes columns
-            contentCellsWrapper.className = `collapsible-content-wrapper p-0`; // p-0 to avoid extra padding
+            // Create a single TD that holds the collapsible content
+            const contentTd = document.createElement('td');
+            contentTd.colSpan = activities.length - 1 + 1; // All activities (excluding 'Time' from `activities`) + Notes
+            contentTd.className = `p-0`; // Minimal padding for the container TD
 
             const contentDiv = document.createElement('div');
-            contentDiv.className = `flex flex-wrap items-center -mx-2 ${isExpandedInitially ? 'expanded' : 'hidden'}`; // Use flex for contained inputs
-            contentDiv.style.minWidth = `calc(640px - ${margin.left + margin.right}px - 6rem)`; // Ensure inputs don't wrap too aggressively
+            // Apply collapsible-content for toggling display, and initial state via expanded/hidden
+            contentDiv.className = `collapsible-content flex flex-wrap items-center -mx-2 ${isExpandedInitially ? 'expanded' : ''}`;
 
             // Activity cells with checkboxes or dropdowns
-            activities.slice(1).forEach(activity => { // Start from 'Nap' (index 1), as 'Time' is separate
+            activities.slice(0).forEach(activity => { // Iterate through ALL activities now, as the first TD is 'Time'
+                // Skip 'Time' activity as it's the toggle cell
+                if (activity === 'Time') return;
+
                 const cellWrapper = document.createElement('div');
                 cellWrapper.className = 'w-1/5 sm:w-auto p-2 text-center flex-shrink-0'; // Adjust width as needed for responsiveness
 
@@ -470,7 +487,7 @@
                 contentDiv.appendChild(cellWrapper);
             });
 
-            // Notes cell
+            // Notes input is always present
             const notesCellWrapper = document.createElement('div');
             notesCellWrapper.className = 'w-full p-2'; // Full width for notes
             const notesLabel = document.createElement('label');
@@ -482,12 +499,12 @@
             notesInput.type = 'text';
             notesInput.placeholder = 'Add a note...';
             notesInput.className = 'block w-full text-sm rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500';
+            notesInput.dataset.activity = 'Notes'; // Add data-activity for notes
             notesCellWrapper.appendChild(notesInput);
             contentDiv.appendChild(notesCellWrapper);
 
-            contentCellsWrapper.appendChild(contentDiv);
-            row.appendChild(contentCellsWrapper);
-
+            contentTd.appendChild(contentDiv);
+            row.appendChild(contentTd);
 
             return row;
         }
@@ -495,14 +512,12 @@
         // Toggle visibility of a row's content
         function toggleRowContent(rowElement) {
             const timeCell = rowElement.querySelector('.collapsible-toggle-cell');
-            const contentDiv = rowElement.querySelector('.collapsible-content'); // Target the direct content div
+            const contentDiv = rowElement.querySelector('.collapsible-content');
             if (timeCell && contentDiv) {
                 if (contentDiv.classList.contains('expanded')) {
                     contentDiv.classList.remove('expanded');
-                    contentDiv.classList.add('hidden');
                     timeCell.classList.remove('expanded');
                 } else {
-                    contentDiv.classList.remove('hidden');
                     contentDiv.classList.add('expanded');
                     timeCell.classList.add('expanded');
                 }
@@ -515,7 +530,6 @@
             const now = new Date();
             const currentHour = now.getHours();
             const currentMinute = now.getMinutes();
-            let currentFifteenMinSlotIndex = -1;
 
             const tableStartDate = new Date();
             tableStartDate.setHours(0, 0, 0, 0); // Start at midnight
@@ -576,8 +590,8 @@
                     }
                 });
                 
-                const notesInput = row.querySelector('input[type="text"]');
-                rowData.notes = notesInput.value;
+                const notesInput = row.querySelector('[data-activity="Notes"]'); // Select by data-activity for notes
+                rowData.notes = notesInput ? notesInput.value : '';
                 
                 dataToSave.push(rowData);
             });
@@ -628,8 +642,8 @@
                                     }
                                 }
                             });
-                            const notesInput = row.querySelector('input[type="text"]');
-                            notesInput.value = rowData.notes || '';
+                            const notesInput = row.querySelector('[data-activity="Notes"]');
+                            if (notesInput) notesInput.value = rowData.notes || '';
                         });
                         currentDayData = savedData; // Update local cache
                         showMessage('Success', 'Activity log loaded successfully!');
