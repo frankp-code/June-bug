@@ -6,6 +6,8 @@
     <title>Junies Journal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap">
+    <!-- D3.js for charting -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -13,28 +15,52 @@
         }
         .container {
             max-width: 100%;
-            overflow-x: hidden; /* Prevent horizontal scrolling on the main container */
+            overflow-x: auto;
         }
-        /* Style for checkbox labels for better tap target */
-        .activity-label {
-            display: flex;
-            align-items: center;
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.375rem; /* rounded-md */
-            background-color: #f9fafb; /* bg-gray-50 */
-            border: 1px solid #e5e7eb; /* border-gray-200 */
-            transition: all 0.1s ease-in-out;
-            cursor: pointer;
+        .table-container {
+            min-width: 640px;
         }
-        .activity-label:hover {
-            background-color: #f3f4f6; /* hover:bg-gray-100 */
+        .tab-button {
+            @apply px-4 py-2 text-sm font-medium rounded-t-lg focus:outline-none transition-colors duration-200;
         }
-        .activity-label input:checked + span {
-            font-weight: 600; /* font-semibold */
-            color: #2563eb; /* text-blue-600 */
+        .tab-button.active {
+            @apply bg-white text-blue-600 border-b-2 border-blue-600;
         }
-        .activity-label input:checked {
-            border-color: #2563eb; /* border-blue-600 */
+        .tab-button.inactive {
+            @apply bg-gray-100 text-gray-600 hover:bg-gray-200;
+        }
+        .graph-container {
+            background-color: #ffffff;
+            border-radius: 0.75rem; /* rounded-lg */
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); /* shadow-md */
+            padding: 1.5rem; /* p-6 */
+            margin-bottom: 2rem; /* space-y-8 between graphs */
+        }
+        .graph-title {
+            @apply text-lg font-semibold text-gray-800 mb-4;
+        }
+        .axis text {
+            font-size: 10px;
+        }
+        .axis path, .axis line {
+            fill: none;
+            stroke: #d1d5db; /* gray-300 */
+            shape-rendering: crispEdges;
+        }
+        .grid .tick line {
+            stroke: #e5e7eb; /* gray-200 */
+            stroke-opacity: 0.7;
+            shape-rendering: crispEdges;
+        }
+        .line {
+            fill: none;
+            stroke: #2563eb; /* blue-600 */
+            stroke-width: 2px;
+        }
+        .dot {
+            fill: #2563eb; /* blue-600 */
+            stroke: #ffffff; /* white */
+            stroke-width: 1.5px;
         }
     </style>
 </head>
@@ -65,25 +91,52 @@
             <p id="statusMessage" class="mt-2 text-green-600 font-semibold"></p>
         </div>
 
-        <!-- Daily Summary Section -->
-        <div class="bg-blue-50 p-4 rounded-lg shadow-sm mb-6">
-            <h2 class="text-xl font-semibold text-blue-800 mb-3 text-center">Daily Summary</h2>
-            <div id="dailySummary" class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm text-gray-700">
-                <!-- Summary items will be populated here -->
-                <p><strong>Nap:</strong> <span id="summaryNap">0</span></p>
-                <p><strong>Wake Up:</strong> <span id="summaryWakeUp">0</span></p>
-                <p><strong>Food:</strong> <span id="summaryFood">0</span></p>
-                <p><strong>Walk:</strong> <span id="summaryWalk">0</span></p>
-                <p><strong>Wee:</strong> <span id="summaryWee">0</span></p>
-                <p><strong>Poo:</strong> <span id="summaryPoo">0</span></p>
-                <p><strong>Sick:</strong> <span id="summarySick">0</span></p>
+        <!-- Tabs -->
+        <div class="flex border-b border-gray-200 mb-4">
+            <button id="dailyLogTabBtn" class="tab-button active">Daily Log</button>
+            <button id="summaryTabBtn" class="tab-button inactive">Summary</button>
+        </div>
+
+        <!-- Tab Content: Daily Log -->
+        <div id="dailyLogTabContent" class="tab-content">
+            <div class="table-container">
+                <table class="w-full text-sm text-left text-gray-500 rounded-lg overflow-hidden">
+                    <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                        <tr>
+                            <th scope="col" class="py-3 px-2 sm:px-4 rounded-tl-lg">Time</th>
+                            <th scope="col" class="py-3 px-2 sm:px-4 text-center">Nap</th>
+                            <th scope="col" class="py-3 px-2 sm:px-4 text-center">Wake Up</th>
+                            <th scope="col" class="py-3 px-2 sm:px-4 text-center">Food</th>
+                            <th scope="col" class="py-3 px-2 sm:px-4 text-center">Walk</th>
+                            <th scope="col" class="py-3 px-2 sm:px-4 text-center">Wee</th>
+                            <th scope="col" class="py-3 px-2 sm:px-4 text-center">Poo</th>
+                            <th scope="col" class="py-3 px-2 sm:px-4 text-center">Sick</th>
+                            <th scope="col" class="py-3 px-2 sm:px-4 rounded-tr-lg">Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="activityTableBody">
+                        <!-- Table rows will be generated by JavaScript -->
+                    </tbody>
+                </table>
             </div>
         </div>
-        
-        <!-- Activity Grid -->
-        <div id="activityGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            <!-- Time blocks will be generated by JavaScript -->
+
+        <!-- Tab Content: Summary -->
+        <div id="summaryTabContent" class="tab-content hidden p-4">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Daily Summary</h2>
+            <div class="bg-gray-50 p-6 rounded-lg shadow-inner mb-6">
+                <p class="text-lg text-gray-700 mb-2">Total Sleep Duration: <span id="totalSleepDuration" class="font-bold text-blue-600">0 hours 0 minutes</span></p>
+                <div id="sleepPeriodsList" class="mt-4 text-sm text-gray-600">
+                    <!-- Individual sleep periods will be listed here -->
+                </div>
+            </div>
+
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Weekly Activity Trends</h2>
+            <div id="weeklyGraphsContainer" class="space-y-8">
+                <!-- Graphs will be rendered here by D3.js -->
+            </div>
         </div>
+
     </div>
 
     <!-- Message Modal -->
@@ -129,12 +182,13 @@
         let db, auth, userId;
         let isAuthReady = false; // Flag to check if Firebase is ready
         const activities = ['Nap', 'Wake Up', 'Food', 'Walk', 'Wee', 'Poo', 'Sick'];
+        let currentDayData = []; // Store the currently loaded daily log data
 
         // UI elements
         const saveBtn = document.getElementById('saveBtn');
         const loadBtn = document.getElementById('loadBtn');
         const logDateInput = document.getElementById('logDate');
-        const activityGrid = document.getElementById('activityGrid');
+        const activityTableBody = document.getElementById('activityTableBody');
         const userIdDisplay = document.getElementById('userIdDisplay');
         const statusMessage = document.getElementById('statusMessage');
         const messageModal = document.getElementById('messageModal');
@@ -142,10 +196,17 @@
         const modalMessage = document.getElementById('modalMessage');
         const closeModalBtn = document.getElementById('closeModalBtn');
 
-        const summaryElements = {};
-        activities.forEach(activity => {
-            summaryElements[`summary${activity}`] = document.getElementById(`summary${activity}`);
-        });
+        // Tab elements
+        const dailyLogTabBtn = document.getElementById('dailyLogTabBtn');
+        const summaryTabBtn = document.getElementById('summaryTabBtn');
+        const dailyLogTabContent = document.getElementById('dailyLogTabContent');
+        const summaryTabContent = document.getElementById('summaryTabContent');
+        const totalSleepDurationSpan = document.getElementById('totalSleepDuration');
+        const sleepPeriodsList = document.getElementById('sleepPeriodsList');
+        const weeklyGraphsContainer = document.getElementById('weeklyGraphsContainer');
+
+
+        // --- Utility Functions ---
 
         // Show a custom modal message
         function showMessage(title, message) {
@@ -158,6 +219,52 @@
         closeModalBtn.addEventListener('click', () => {
             messageModal.classList.add('hidden');
         });
+
+        // Convert time string (e.g., "7:15 AM") to minutes from midnight
+        function timeToMinutes(timeString) {
+            const [time, ampm] = timeString.split(' ');
+            let [hours, minutes] = time.split(':').map(Number);
+
+            if (ampm === 'PM' && hours !== 12) {
+                hours += 12;
+            } else if (ampm === 'AM' && hours === 12) {
+                hours = 0; // 12 AM is 0 hours
+            }
+            return hours * 60 + minutes;
+        }
+
+        // Convert minutes to a human-readable duration string
+        function formatDuration(totalMinutes) {
+            if (totalMinutes < 0) return "0 hours 0 minutes";
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = Math.round(totalMinutes % 60); // Round minutes for better display
+            return `${hours} hours ${minutes} minutes`;
+        }
+
+        /**
+         * Helper function to fetch log data for a specific date.
+         * @param {string} dateString - The date in YYYY-MM-DD format.
+         * @returns {Promise<Array|null>} - A promise that resolves to the log data or null if not found/error.
+         */
+        async function getLogForDate(dateString) {
+            if (!db || !userId || !dateString) {
+                return null;
+            }
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'users', userId, 'puppyLogs', dateString);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    return docSnap.data().log;
+                }
+                return null;
+            } catch (e) {
+                console.error(`Error fetching log for date ${dateString}: `, e);
+                // No modal here, as this is a background fetch for calculation
+                return null;
+            }
+        }
+
+        // --- Firebase Initialization ---
 
         // Initialize Firebase and set up auth listener
         async function initFirebase() {
@@ -176,8 +283,8 @@
                         loadBtn.disabled = false;
                         saveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
                         loadBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                        // Load data for the default date once authenticated
-                        await loadData();
+                        // Load data for today after auth is ready
+                        await loadData(); // Automatically load today's log
                     } else {
                         // Sign in anonymously if not authenticated
                         await signInAnonymously(auth);
@@ -190,55 +297,52 @@
             }
         }
 
-        // Function to create a new time block element
-        function createTimeBlockElement(timeString) {
-            const timeBlock = document.createElement('div');
-            timeBlock.id = `time-block-${timeString.replace(/[^a-zA-Z0-9]/g, '')}`; // Unique ID for each block
-            timeBlock.className = 'bg-gray-50 p-4 rounded-xl shadow-sm flex flex-col h-full'; // Added flex-col and h-full
-            
-            const timeHeader = document.createElement('h3');
-            timeHeader.className = 'font-bold text-lg text-gray-800 mb-2';
-            timeHeader.textContent = timeString;
-            timeBlock.appendChild(timeHeader);
+        // --- Table Generation and Data Handling ---
 
-            const activitiesContainer = document.createElement('div');
-            activitiesContainer.className = 'flex flex-wrap gap-2 mb-3 flex-grow'; // flex-grow for spacing
+        // Function to create a new table row for a given time
+        function createTableRow(timeString) {
+            const row = document.createElement('tr');
+            row.className = 'bg-white border-b hover:bg-gray-50';
             
+            // Time cell
+            const timeCell = document.createElement('td');
+            timeCell.className = 'py-2 px-2 sm:px-4 font-medium text-gray-900 whitespace-nowrap';
+            timeCell.textContent = timeString;
+            row.appendChild(timeCell);
+
+            // Activity cells with checkboxes
             activities.forEach(activity => {
-                const label = document.createElement('label');
-                label.className = 'activity-label'; // Custom class for styling
-                
+                const cell = document.createElement('td');
+                cell.className = 'py-2 px-2 sm:px-4 text-center';
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
-                checkbox.className = 'form-checkbox rounded text-blue-600 w-4 h-4';
+                checkbox.className = 'w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2';
                 checkbox.dataset.activity = activity;
-                checkbox.addEventListener('change', updateDailySummary); // Add listener for summary
-                
-                const span = document.createElement('span');
-                span.className = 'ml-1 text-gray-700';
-                span.textContent = activity;
-
-                label.appendChild(checkbox);
-                label.appendChild(span);
-                activitiesContainer.appendChild(label);
+                cell.appendChild(checkbox);
+                row.appendChild(cell);
             });
-            timeBlock.appendChild(activitiesContainer);
 
+            // Notes cell
+            const notesCell = document.createElement('td');
+            notesCell.className = 'py-2 px-2 sm:px-4';
             const notesInput = document.createElement('input');
             notesInput.type = 'text';
             notesInput.placeholder = 'Add a note...';
-            notesInput.className = 'block w-full text-sm rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 mt-auto'; // mt-auto for bottom alignment
-            timeBlock.appendChild(notesInput);
+            notesInput.className = 'block w-full text-sm rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500';
+            notesInput.style.maxWidth = '10rem'; // Constrain width for a better layout
+            notesCell.appendChild(notesInput);
+            row.appendChild(notesCell);
 
-            return timeBlock;
+            return row;
         }
 
-        // Generate the 24-hour grid with 15-minute intervals
-        function generateEmptyGrid() {
-            activityGrid.innerHTML = '';
+        // Generate the 24-hour table with 15-minute intervals
+        function generateEmptyTable() {
+            activityTableBody.innerHTML = '';
             const now = new Date();
             now.setHours(0, 0, 0, 0); // Start at midnight
             
+            // Loop for 24 hours (24 * 4 = 96 intervals)
             for (let i = 0; i < 24 * 4; i++) {
                 const hour = now.getHours();
                 const minute = now.getMinutes();
@@ -246,34 +350,14 @@
                 const displayHour = (hour % 12) === 0 ? 12 : hour % 12;
                 const timeString = `${displayHour}:${minute.toString().padStart(2, '0')} ${ampm}`;
                 
-                const newBlock = createTimeBlockElement(timeString);
-                activityGrid.appendChild(newBlock);
+                const newRow = createTableRow(timeString);
+                activityTableBody.appendChild(newRow);
                 
+                // Add 15 minutes to the time
                 now.setMinutes(now.getMinutes() + 15);
             }
-            updateDailySummary(); // Initialize summary for empty grid
-        }
-
-        // Update Daily Summary
-        function updateDailySummary() {
-            const counts = {};
-            activities.forEach(activity => counts[activity] = 0);
-
-            const timeBlocks = activityGrid.querySelectorAll('[id^="time-block-"]');
-            timeBlocks.forEach(block => {
-                activities.forEach(activity => {
-                    const checkbox = block.querySelector(`input[data-activity="${activity}"]`);
-                    if (checkbox && checkbox.checked) {
-                        counts[activity]++;
-                    }
-                });
-            });
-
-            activities.forEach(activity => {
-                if (summaryElements[`summary${activity}`]) {
-                    summaryElements[`summary${activity}`].textContent = counts[activity];
-                }
-            });
+            currentDayData = []; // Clear current data when generating empty table
+            calculateAndDisplaySummary(); // Recalculate summary for empty data
         }
         
         // Save data to Firestore
@@ -290,17 +374,17 @@
             }
 
             const dataToSave = [];
-            const timeBlocks = activityGrid.querySelectorAll('[id^="time-block-"]'); // Select all time blocks
-            timeBlocks.forEach(block => {
-                const time = block.querySelector('h3').textContent;
+            const rows = activityTableBody.querySelectorAll('tr');
+            rows.forEach(row => {
+                const time = row.querySelector('td:first-child').textContent;
                 const rowData = { time, activities: {} };
                 
-                const checkboxes = block.querySelectorAll('input[type="checkbox"]');
+                const checkboxes = row.querySelectorAll('input[type="checkbox"]');
                 checkboxes.forEach(checkbox => {
                     rowData.activities[checkbox.dataset.activity] = checkbox.checked;
                 });
                 
-                const notesInput = block.querySelector('input[type="text"]');
+                const notesInput = row.querySelector('input[type="text"]');
                 rowData.notes = notesInput.value;
                 
                 dataToSave.push(rowData);
@@ -309,6 +393,8 @@
             try {
                 const docRef = doc(db, 'artifacts', appId, 'users', userId, 'puppyLogs', selectedDate);
                 await setDoc(docRef, { log: dataToSave });
+                currentDayData = dataToSave; // Update local cache
+                await calculateAndDisplaySummary(); // Update summary after saving (await it now)
                 showMessage('Success', 'Daily log saved successfully!');
             } catch (e) {
                 console.error("Error saving document: ", e);
@@ -319,7 +405,7 @@
         // Load data from Firestore
         async function loadData() {
             if (!isAuthReady) {
-                showMessage('Error', 'App is not ready. Please wait a moment.');
+                // If auth is not ready, we wait for onAuthStateChanged to call loadData
                 return;
             }
 
@@ -330,44 +416,319 @@
             }
 
             try {
-                const docRef = doc(db, 'artifacts', appId, 'users', userId, 'puppyLogs', selectedDate);
-                const docSnap = await getDoc(docRef);
+                const savedData = await getLogForDate(selectedDate); // Use helper function
 
-                generateEmptyGrid(); // Always generate empty grid first to clear and reset
-
-                if (docSnap.exists()) {
-                    const savedData = docSnap.data().log;
-                    if (savedData.length === activityGrid.children.length) {
-                        const timeBlocks = activityGrid.querySelectorAll('[id^="time-block-"]');
-                        timeBlocks.forEach((block, index) => {
+                if (savedData) {
+                    if (savedData.length === activityTableBody.children.length) {
+                        const rows = activityTableBody.querySelectorAll('tr');
+                        rows.forEach((row, index) => {
                             const rowData = savedData[index];
-                            const checkboxes = block.querySelectorAll('input[type="checkbox"]');
+                            const checkboxes = row.querySelectorAll('input[type="checkbox"]');
                             checkboxes.forEach(checkbox => {
+                                // Ensure activity key exists before trying to set checked status
                                 checkbox.checked = rowData.activities[checkbox.dataset.activity] || false;
                             });
-                            const notesInput = block.querySelector('input[type="text"]');
+                            const notesInput = row.querySelector('input[type="text"]');
                             notesInput.value = rowData.notes || '';
                         });
+                        currentDayData = savedData; // Update local cache
                         showMessage('Success', 'Log loaded successfully!');
                     } else {
-                        showMessage('Error', 'Data format mismatch. Resetting log.');
-                        // generateEmptyGrid() already called
+                        // Data format mismatch: potentially different number of rows
+                        showMessage('Error', 'Data format mismatch. Generating empty log.');
+                        generateEmptyTable();
                     }
                 } else {
                     showMessage('Info', 'No log found for this date. Starting a new, blank log.');
-                    // generateEmptyGrid() already called
+                    generateEmptyTable();
                 }
-                updateDailySummary(); // Update summary after loading
             } catch (e) {
                 console.error("Error loading document: ", e);
                 showMessage('Error', 'Failed to load log. Please check your network connection.');
+            } finally {
+                // Always recalculate summary after attempting to load data
+                await calculateAndDisplaySummary(); // Await summary calculation
             }
         }
         
-        // Add event listeners
+        // --- Summary Calculation ---
+
+        async function calculateAndDisplaySummary() {
+            let totalSleepMinutes = 0;
+            let sleepPeriods = [];
+            let potentialSleepStartEntry = null; // Store the full entry object for start time
+            const selectedDateString = logDateInput.value;
+
+            // If no data or no selected date, reset summary
+            if (!currentDayData || currentDayData.length === 0 || !selectedDateString) {
+                totalSleepDurationSpan.textContent = "0 hours 0 minutes";
+                sleepPeriodsList.innerHTML = "<p class='text-gray-500'>No sleep data available for this day.</p>";
+            } else {
+            
+                // Create a Date object for the beginning of the selected day to construct full timestamps
+                const currentDayDate = new Date(selectedDateString);
+                currentDayDate.setHours(0, 0, 0, 0); // Normalize to start of day
+
+                for (let i = 0; i < currentDayData.length; i++) {
+                    const entry = currentDayData[i];
+                    const entryMinutes = timeToMinutes(entry.time);
+                    
+                    // Construct full Date object for the entry time
+                    const entryDateTime = new Date(currentDayDate);
+                    entryDateTime.setHours(Math.floor(entryMinutes / 60), entryMinutes % 60, 0, 0);
+
+                    const isNap = entry.activities.Nap;
+                    const isWakeUp = entry.activities['Wake Up'];
+
+                    // If a nap starts and we're not currently tracking a sleep period
+                    if (isNap && potentialSleepStartEntry === null) {
+                        potentialSleepStartEntry = {
+                            time: entry.time,
+                            dateTime: entryDateTime
+                        };
+                    } 
+                    // If a wake up occurs and we have a potential sleep start
+                    else if (isWakeUp && potentialSleepStartEntry !== null) {
+                        const sleepEndDateTime = entryDateTime;
+                        const durationMs = sleepEndDateTime.getTime() - potentialSleepStartEntry.dateTime.getTime();
+                        const durationMinutes = durationMs / (1000 * 60);
+
+                        if (durationMinutes > 0) {
+                            totalSleepMinutes += durationMinutes;
+                            sleepPeriods.push({
+                                start: potentialSleepStartEntry.time,
+                                end: entry.time,
+                                duration: durationMinutes
+                            });
+                        }
+                        potentialSleepStartEntry = null; // Reset for the next sleep period
+                    }
+                }
+
+                // Handle a sleep period that extends until the next day
+                if (potentialSleepStartEntry !== null) {
+                    // Calculate the next day's date
+                    const nextDay = new Date(currentDayDate);
+                    nextDay.setDate(currentDayDate.getDate() + 1);
+                    const nextDayDateString = nextDay.toISOString().split('T')[0];
+
+                    let sleepEndDateTime = null;
+                    let sleepEndTimeString = null;
+                    let foundWakeUpNextDay = false;
+
+                    // Try to load the next day's data
+                    const nextDayLog = await getLogForDate(nextDayDateString);
+
+                    if (nextDayLog && nextDayLog.length > 0) {
+                        // Find the first "Wake Up" on the next day
+                        for (const nextDayEntry of nextDayLog) {
+                            if (nextDayEntry.activities['Wake Up']) {
+                                const nextDayEntryMinutes = timeToMinutes(nextDayEntry.time);
+                                sleepEndDateTime = new Date(nextDay); // Start of next day
+                                sleepEndDateTime.setHours(Math.floor(nextDayEntryMinutes / 60), nextDayEntryMinutes % 60, 0, 0);
+                                sleepEndTimeString = nextDayEntry.time + " (next day)";
+                                foundWakeUpNextDay = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (foundWakeUpNextDay && sleepEndDateTime !== null) {
+                        // Calculate total duration from potentialSleepStartEntry to sleepEndDateTime (next day)
+                        const durationMs = sleepEndDateTime.getTime() - potentialSleepStartEntry.dateTime.getTime();
+                        const durationMinutes = durationMs / (1000 * 60);
+
+                        if (durationMinutes > 0) {
+                            totalSleepMinutes += durationMinutes;
+                            sleepPeriods.push({
+                                start: potentialSleepStartEntry.time,
+                                end: sleepEndTimeString,
+                                duration: durationMinutes
+                            });
+                        }
+                    } else {
+                        // Fallback: If no Wake Up found next day, assume sleep until end of current day (23:59)
+                        const endOfDayDateTime = new Date(currentDayDate);
+                        endOfDayDateTime.setHours(23, 59, 0, 0);
+                        
+                        const durationMs = endOfDayDateTime.getTime() - potentialSleepStartEntry.dateTime.getTime();
+                        const durationMinutes = durationMs / (1000 * 60);
+
+                        if (durationMinutes > 0) {
+                            totalSleepMinutes += durationMinutes;
+                            sleepPeriods.push({
+                                start: potentialSleepStartEntry.time,
+                                end: "End of Day",
+                                duration: durationMinutes
+                            });
+                        }
+                    }
+                }
+
+                totalSleepDurationSpan.textContent = formatDuration(totalSleepMinutes);
+
+                // Display individual sleep periods
+                if (sleepPeriods.length > 0) {
+                    sleepPeriodsList.innerHTML = `<h3 class="font-medium text-gray-700 mb-2">Individual Sleep Periods:</h3>`;
+                    const ul = document.createElement('ul');
+                    ul.className = 'list-disc list-inside text-gray-600 space-y-1';
+                    sleepPeriods.forEach(period => {
+                        const li = document.createElement('li');
+                        li.textContent = `From ${period.start} to ${period.end} (${formatDuration(period.duration)})`;
+                        ul.appendChild(li);
+                    });
+                    sleepPeriodsList.appendChild(ul);
+                } else {
+                    sleepPeriodsList.innerHTML = "<p class='text-gray-500'>No explicit Nap/Wake Up cycles recorded for sleep.</p>";
+                }
+            } // End of if (!currentDayData || ...)
+
+
+            // --- Weekly Activity Data Processing ---
+            const weeklyData = [];
+            const currentDate = new Date(selectedDateString); // Use selected date for the week
+            currentDate.setHours(0, 0, 0, 0);
+
+            for (let i = 6; i >= 0; i--) { // Loop for 7 days (current day + past 6 days)
+                const loopDate = new Date(currentDate);
+                loopDate.setDate(currentDate.getDate() - i);
+                const loopDateString = loopDate.toISOString().split('T')[0];
+                const dayName = loopDate.toLocaleDateString('en-US', { weekday: 'short' });
+
+                const dailyCounts = { date: dayName, fullDate: loopDateString };
+                activities.forEach(activity => dailyCounts[activity] = 0);
+
+                const logForLoopDate = await getLogForDate(loopDateString);
+
+                if (logForLoopDate) {
+                    logForLoopDate.forEach(entry => {
+                        activities.forEach(activity => {
+                            if (entry.activities[activity]) {
+                                dailyCounts[activity]++;
+                            }
+                        });
+                    });
+                }
+                weeklyData.push(dailyCounts);
+            }
+            
+            renderWeeklyGraphs(weeklyData);
+        }
+
+        // --- D3.js Graphing Function ---
+        function renderWeeklyGraphs(data) {
+            weeklyGraphsContainer.innerHTML = ''; // Clear previous graphs
+
+            const margin = { top: 20, right: 30, bottom: 40, left: 40 };
+            const width = Math.max(300, weeklyGraphsContainer.clientWidth) - margin.left - margin.right;
+            const height = 200 - margin.top - margin.bottom;
+
+            activities.forEach(activity => {
+                // Skip 'Wake Up' as it's part of sleep calculation, and 'Sick' might be too infrequent
+                if (activity === 'Wake Up') return;
+
+                const graphDiv = document.createElement('div');
+                graphDiv.className = 'graph-container';
+                graphDiv.innerHTML = `<h3 class="graph-title">${activity} per Day</h3>`;
+                weeklyGraphsContainer.appendChild(graphDiv);
+
+                const svg = d3.select(graphDiv)
+                    .append('svg')
+                    .attr('width', width + margin.left + margin.right)
+                    .attr('height', height + margin.top + margin.bottom)
+                    .append('g')
+                    .attr('transform', `translate(${margin.left},${margin.top})`);
+
+                const xScale = d3.scaleBand()
+                    .range([0, width])
+                    .domain(data.map(d => d.date))
+                    .padding(0.1);
+
+                const yScale = d3.scaleLinear()
+                    .range([height, 0])
+                    .domain([0, d3.max(data, d => d[activity]) + 1]); // +1 to ensure padding at top
+
+                // Add X axis
+                svg.append('g')
+                    .attr('class', 'x axis')
+                    .attr('transform', `translate(0,${height})`)
+                    .call(d3.axisBottom(xScale));
+
+                // Add Y axis
+                svg.append('g')
+                    .attr('class', 'y axis')
+                    .call(d3.axisLeft(yScale).ticks(yScale.domain()[1] > 0 ? yScale.domain()[1] : 1).tickFormat(d3.format("d"))); // Integer ticks
+
+                // Add Y-axis grid lines
+                svg.append("g")
+                    .attr("class", "grid")
+                    .call(d3.axisLeft(yScale)
+                        .ticks(yScale.domain()[1] > 0 ? yScale.domain()[1] : 1)
+                        .tickSize(-width)
+                        .tickFormat("")
+                    );
+
+                // Add the line
+                svg.append('path')
+                    .datum(data)
+                    .attr('class', 'line')
+                    .attr('d', d3.line()
+                        .x(d => xScale(d.date) + xScale.bandwidth() / 2)
+                        .y(d => yScale(d[activity]))
+                    );
+
+                // Add the circles for points
+                svg.selectAll('.dot')
+                    .data(data)
+                    .enter().append('circle')
+                    .attr('class', 'dot')
+                    .attr('cx', d => xScale(d.date) + xScale.bandwidth() / 2)
+                    .attr('cy', d => yScale(d[activity]))
+                    .attr('r', 4);
+            });
+        }
+
+
+        // --- Tab Switching Logic ---
+
+        function showTab(tabId) {
+            // Hide all tab content
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+            // Deactivate all tab buttons
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.add('inactive');
+            });
+
+            // Show the selected tab content
+            document.getElementById(tabId + 'Content').classList.remove('hidden');
+            // Activate the selected tab button
+            document.getElementById(tabId + 'Btn').classList.remove('inactive');
+            document.getElementById(tabId + 'Btn').classList.add('active');
+
+            // If switching to summary tab, ensure summary is calculated
+            if (tabId === 'summaryTab') {
+                // Since calculateAndDisplaySummary is now async, we await it.
+                calculateAndDisplaySummary(); 
+            }
+        }
+
+        // --- Event Listeners and Initial Setup ---
+        
+        // Event listeners for save/load buttons and date changes
         saveBtn.addEventListener('click', saveData);
         loadBtn.addEventListener('click', loadData);
-        logDateInput.addEventListener('change', loadData); // Load data when date changes
+        logDateInput.addEventListener('change', async () => {
+            if (isAuthReady) {
+                await loadData(); // Reload data when date changes
+            }
+        });
+
+        // Tab button event listeners
+        dailyLogTabBtn.addEventListener('click', () => showTab('dailyLogTab'));
+        summaryTabBtn.addEventListener('click', () => showTab('summaryTab'));
         
         // Set today's date as default
         function setDefaultDate() {
@@ -380,9 +741,10 @@
         
         // Initial setup on window load
         window.onload = async function() {
-            await initFirebase();
             setDefaultDate();
-            // generateEmptyGrid() is now called within loadData or if data not found
+            generateEmptyTable(); // Generate the table structure first
+            await initFirebase(); // initFirebase calls loadData() after auth
+            showTab('dailyLogTab'); // Show the daily log tab by default
         };
     </script>
 </body>
