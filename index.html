@@ -18,7 +18,7 @@
             overflow-x: auto;
         }
         .table-container {
-            min-width: 640px;
+            min-width: 640px; /* Ensure table is wide enough for all columns */
         }
         /* New tab button styles for consistency with save/load buttons */
         .tab-button {
@@ -96,45 +96,38 @@
         .star-rating.read-only input[type="radio"]:checked ~ label {
              color: #fcd34d;
         }
-        /* Hide content by default, display flex for collapsed content within table row */
-        /*
-           Old:
-           .collapsible-content-wrapper { display: contents; }
-           .collapsible-content { display: none; }
-           .collapsible-content.expanded { display: table-cell; }
-        */
-        /* New simplified approach for collapsible content */
-        .collapsible-content {
-            display: none; /* Hidden by default */
-            flex-wrap: wrap; /* Content inside should flex */
-            align-items: center;
-            /* margin: -0.5rem; */ /* Removed margin, will handle padding directly on cells */
-        }
-        .collapsible-content.expanded {
-            display: flex; /* Shown as flex when expanded */
-        }
-
-        /* Style for the time cell to indicate it's clickable */
-        .collapsible-toggle-cell {
-            cursor: pointer;
-            user-select: none;
-            position: relative;
-        }
-        .collapsible-toggle-cell::after {
-            content: '▼'; /* Down arrow */
-            position: absolute;
-            right: 0.5rem;
-            top: 50%;
-            transform: translateY(-50%);
-            transition: transform 0.2s;
-        }
-        .collapsible-toggle-cell.expanded::after {
-            content: '▲'; /* Up arrow */
-        }
+        /* No collapsible CSS needed anymore */
 
         /* Ensure dropdowns fit well */
         select[data-input-type="dropdown"] {
             padding-right: 0.5rem; /* Adjust padding for arrow */
+        }
+
+        /* Responsive table cell styling */
+        .activity-cell {
+            padding: 0.5rem 0.25rem; /* Smaller padding for mobile */
+            text-align: center;
+        }
+        @media (min-width: 640px) { /* sm breakpoint */
+            .activity-cell {
+                padding: 0.5rem 1rem; /* Restore larger padding for desktop */
+            }
+        }
+        .activity-cell input[type="checkbox"] {
+            margin: auto; /* Center checkboxes */
+        }
+        .activity-cell select {
+            width: 4rem; /* Fixed width for dropdowns on mobile */
+            margin: auto;
+        }
+        .notes-cell input[type="text"] {
+            width: 8rem; /* Fixed width for notes on mobile */
+            margin: auto;
+        }
+        @media (min-width: 640px) { /* sm breakpoint */
+            .activity-cell select, .notes-cell input[type="text"] {
+                width: auto; /* Auto width on desktop */
+            }
         }
 
     </style>
@@ -240,7 +233,7 @@
                     <p class="text-sm text-gray-500" id="modalMessage"></p>
                 </div>
                 <div class="items-center px-4 py-3">
-                    <button id="closeModalBtn" class="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button id="closeModalBtn" class="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-500">
                         OK
                     </button>
                 </div>
@@ -380,7 +373,7 @@
                 db = getFirestore(app);
 
                 onAuthStateChanged(auth, async (user) => {
-                    try { // Added try-catch block here
+                    try { 
                         if (user) {
                             userId = user.uid;
                             userIdDisplay.textContent = userId;
@@ -415,46 +408,31 @@
         // --- Table Generation and Data Handling for Daily Log Tab ---
 
         /**
-         * Creates a new table row for a given time, with collapsible content.
+         * Creates a new table row for a given time.
          * @param {string} timeString - The time for the row (e.g., "12:00 AM").
-         * @param {boolean} isExpandedInitially - Whether the row's content should be expanded on creation.
          */
-        function createTableRow(timeString, isExpandedInitially) {
+        function createTableRow(timeString) {
             const row = document.createElement('tr');
             row.className = 'bg-white border-b hover:bg-gray-50';
             row.dataset.time = timeString; // Store time for identification
 
-            // Time cell (collapsible toggle)
+            // Time cell
             const timeCell = document.createElement('td');
-            timeCell.className = `py-2 px-2 sm:px-4 font-medium text-gray-900 whitespace-nowrap collapsible-toggle-cell ${isExpandedInitially ? 'expanded' : ''}`;
+            timeCell.className = `py-2 px-2 sm:px-4 font-medium text-gray-900 whitespace-nowrap`;
             timeCell.textContent = timeString;
-            timeCell.addEventListener('click', () => toggleRowContent(row));
             row.appendChild(timeCell);
 
-            // Create a single TD that holds the collapsible content
-            const contentTd = document.createElement('td');
-            contentTd.colSpan = activities.length - 1 + 1; // All activities (excluding 'Time' from `activities`) + Notes
-            contentTd.className = `p-0`; // Minimal padding for the container TD
-
-            const contentDiv = document.createElement('div');
-            // Apply collapsible-content for toggling display, and initial state via expanded/hidden
-            contentDiv.className = `collapsible-content flex flex-wrap items-center -mx-2 ${isExpandedInitially ? 'expanded' : ''}`;
-
             // Activity cells with checkboxes or dropdowns
-            activities.slice(0).forEach(activity => { // Iterate through ALL activities now, as the first TD is 'Time'
-                // Skip 'Time' activity as it's the toggle cell
+            activities.forEach(activity => {
+                // Skip 'Time' activity as it's the first cell
                 if (activity === 'Time') return;
 
-                const cellWrapper = document.createElement('div');
-                cellWrapper.className = 'w-1/5 sm:w-auto p-2 text-center flex-shrink-0'; // Adjust width as needed for responsiveness
-
-                const label = document.createElement('label');
-                label.className = 'block text-xs font-semibold text-gray-700 mb-1';
-                label.textContent = activity; // Label above input
+                const cell = document.createElement('td');
+                cell.className = 'activity-cell'; // Apply responsive styling
 
                 if (dropdownActivities.includes(activity)) {
                     const select = document.createElement('select');
-                    select.className = 'block w-full text-sm rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500';
+                    select.className = 'block text-sm rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 mx-auto';
                     select.dataset.activity = activity;
                     select.dataset.inputType = 'dropdown'; // Custom data attribute for type
                     
@@ -469,68 +447,34 @@
                         option.textContent = `${i}g`;
                         select.appendChild(option);
                     }
-                    cellWrapper.appendChild(label);
-                    cellWrapper.appendChild(select);
+                    cell.appendChild(select);
                 } else {
                     const checkbox = document.createElement('input');
                     checkbox.type = 'checkbox';
-                    checkbox.className = 'w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2';
+                    checkbox.className = 'w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 mx-auto';
                     checkbox.dataset.activity = activity;
-                    
-                    const inputWrapper = document.createElement('div');
-                    inputWrapper.className = 'flex items-center justify-center h-full';
-                    inputWrapper.appendChild(checkbox);
-
-                    cellWrapper.appendChild(label);
-                    cellWrapper.appendChild(inputWrapper);
+                    cell.appendChild(checkbox);
                 }
-                contentDiv.appendChild(cellWrapper);
+                row.appendChild(cell);
             });
 
-            // Notes input is always present
-            const notesCellWrapper = document.createElement('div');
-            notesCellWrapper.className = 'w-full p-2'; // Full width for notes
-            const notesLabel = document.createElement('label');
-            notesLabel.className = 'block text-xs font-semibold text-gray-700 mb-1';
-            notesLabel.textContent = 'Notes';
-            notesCellWrapper.appendChild(notesLabel);
-
+            // Notes cell
+            const notesCell = document.createElement('td');
+            notesCell.className = 'notes-cell'; // Apply responsive styling
             const notesInput = document.createElement('input');
             notesInput.type = 'text';
             notesInput.placeholder = 'Add a note...';
-            notesInput.className = 'block w-full text-sm rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500';
+            notesInput.className = 'block w-full text-sm rounded-lg border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 mx-auto';
             notesInput.dataset.activity = 'Notes'; // Add data-activity for notes
-            notesCellWrapper.appendChild(notesInput);
-            contentDiv.appendChild(notesCellWrapper);
-
-            contentTd.appendChild(contentDiv);
-            row.appendChild(contentTd);
+            notesCell.appendChild(notesInput);
+            row.appendChild(notesCell);
 
             return row;
-        }
-
-        // Toggle visibility of a row's content
-        function toggleRowContent(rowElement) {
-            const timeCell = rowElement.querySelector('.collapsible-toggle-cell');
-            const contentDiv = rowElement.querySelector('.collapsible-content');
-            if (timeCell && contentDiv) {
-                if (contentDiv.classList.contains('expanded')) {
-                    contentDiv.classList.remove('expanded');
-                    timeCell.classList.remove('expanded');
-                } else {
-                    contentDiv.classList.add('expanded');
-                    timeCell.classList.add('expanded');
-                }
-            }
         }
         
         // Generate the 24-hour table with 15-minute intervals
         function generateEmptyTable() {
             activityTableBody.innerHTML = '';
-            const now = new Date();
-            const currentHour = now.getHours();
-            const currentMinute = now.getMinutes();
-
             const tableStartDate = new Date();
             tableStartDate.setHours(0, 0, 0, 0); // Start at midnight
             
@@ -542,14 +486,7 @@
                 const displayHour = (hour % 12) === 0 ? 12 : hour % 12;
                 const timeString = `${displayHour}:${minute.toString().padStart(2, '0')} ${ampm}`;
 
-                // Determine if this is the current 15-min slot
-                const isCurrentSlot = (
-                    hour === currentHour &&
-                    minute <= currentMinute &&
-                    currentMinute < (minute + 15)
-                );
-
-                const newRow = createTableRow(timeString, isCurrentSlot);
+                const newRow = createTableRow(timeString);
                 activityTableBody.appendChild(newRow);
                 
                 // Add 15 minutes to the time
