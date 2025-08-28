@@ -72,8 +72,9 @@
 
         /* Styles for star rating */
         .star-rating {
-            display: inline-block;
-            direction: rtl; /* For right-to-left star selection */
+            display: flex; /* Use flexbox for better alignment */
+            flex-direction: row-reverse; /* Stars from right to left */
+            justify-content: flex-end; /* Align to the right */
         }
         .star-rating input[type="radio"] {
             display: none;
@@ -85,22 +86,30 @@
             padding: 0 0.1rem;
             transition: color 0.2s;
         }
-        .star-rating input[type="radio"]:checked ~ label,
+        /* When a radio is checked, color it and all subsequent labels (to its left in RTL) */
+        .star-rating input[type="radio"]:checked ~ label {
+            color: #fcd34d; /* Yellow for selected stars */
+        }
+        /* On hover, color the hovered star and all subsequent labels (to its left in RTL) */
         .star-rating label:hover,
         .star-rating label:hover ~ label {
-            color: #fcd34d; /* Yellow for selected/hovered stars */
+            color: #fcd34d; /* Yellow for hovered stars */
+        }
+        /* Ensure checked stars stay yellow even when hovering over other stars */
+        .star-rating input[type="radio"]:checked ~ label:hover,
+        .star-rating input[type="radio"]:checked ~ label:hover ~ label {
+            color: #fcd34d;
         }
         .star-rating.read-only label {
             cursor: default;
         }
-        .star-rating.read-only input[type="radio"]:checked ~ label {
-             color: #fcd34d;
+        /* For read-only, only checked stars should be yellow, no hover effect */
+        .star-rating.read-only label:hover,
+        .star-rating.read-only label:hover ~ label {
+            color: #d1d5db; /* Keep gray on hover for read-only */
         }
-        /* No collapsible CSS needed anymore */
-
-        /* Ensure dropdowns fit well */
-        select[data-input-type="dropdown"] {
-            padding-right: 0.5rem; /* Adjust padding for arrow */
+        .star-rating.read-only input[type="radio"]:checked ~ label {
+            color: #fcd34d; /* Keep yellow for checked stars in read-only */
         }
 
         /* Responsive table cell styling */
@@ -267,7 +276,7 @@
         let db, auth, userId;
         let isAuthReady = false; // Flag to check if Firebase is ready
         // Updated activities array to include 'Hand Feeding' in the desired order
-        const activities = ['Nap', 'Wake Up', 'Food', 'Hand Feeding', 'Walk', 'Wee', 'Poo', 'Sick'];
+        const activityTypes = ['Nap', 'Wake Up', 'Food', 'Hand Feeding', 'Walk', 'Wee', 'Poo', 'Sick']; // Renamed for clarity
         // Activities for which dropdowns are used
         const dropdownActivities = ['Food', 'Hand Feeding'];
         let currentDayData = []; // Store the currently loaded daily log data for activity tab
@@ -423,10 +432,7 @@
             row.appendChild(timeCell);
 
             // Activity cells with checkboxes or dropdowns
-            activities.forEach(activity => {
-                // Skip 'Time' activity as it's the first cell
-                if (activity === 'Time') return;
-
+            activityTypes.forEach(activity => { // Loop through activityTypes for columns
                 const cell = document.createElement('td');
                 cell.className = 'activity-cell'; // Apply responsive styling
 
@@ -516,7 +522,7 @@
                 const rowData = { time, activities: {} };
                 
                 // Process dropdowns and checkboxes
-                activities.forEach(activity => {
+                activityTypes.forEach(activity => { // Use activityTypes here
                     const inputElement = row.querySelector(`[data-activity="${activity}"]`);
                     if (inputElement) {
                         if (inputElement.dataset.inputType === 'dropdown') {
@@ -569,7 +575,7 @@
                         rows.forEach((row, index) => {
                             const rowData = savedData[index];
                             // Process dropdowns and checkboxes
-                            activities.forEach(activity => {
+                            activityTypes.forEach(activity => { // Use activityTypes here
                                 const inputElement = row.querySelector(`[data-activity="${activity}"]`);
                                 if (inputElement) {
                                     if (inputElement.dataset.inputType === 'dropdown') {
